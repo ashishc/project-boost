@@ -1,13 +1,23 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class Rocket : MonoBehaviour
 {
     Rigidbody rigidbody;
     AudioSource audioSource;
+    enum State {Alive, Dying, Transending}
+    State state = State.Alive;
    [SerializeField] float rcsThrust = 100f;
    [SerializeField] float mainThrust = 100f;
+   [SerializeField] AudioClip mainEngine;
+   [SerializeField] AudioClip collisionSound;
+   [SerializeField] AudioClip completionSound;
+
+   [SerializeField] ParticleSystem successParticles;
+   [SerializeField] ParticleSystem deathParticles;
+   [SerializeField] ParticleSystem mainEngineParticles;
 
     // Start is called before the first frame update
     void Start()
@@ -19,33 +29,67 @@ public class Rocket : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        Thrust();
-        Rotate();   
+        if(state == State.Alive){
+            ResponeToThrustInput();
+            Rotate();
+        }
     }
 
-    void Thrust(){
+    void ResponeToThrustInput(){
 
         if(Input.GetKey(KeyCode.Space)){
             rigidbody.AddRelativeForce(Vector3.up * mainThrust);
             if(!audioSource.isPlaying){
-                audioSource.Play();
+                audioSource.PlayOneShot(mainEngine);
             }
+            print("thrust here");
+            mainEngineParticles.Play();
         }else{
+            mainEngineParticles.Stop();
             audioSource.Stop();
         }
     }
 
+    void LoadNextScene(){
+        SceneManager.LoadScene(1);
+        if(audioSource.isPlaying){
+            audioSource.Stop();
+        }  
+    }
+
+    void resetCurrentScene(){
+           Scene activeScene = SceneManager.GetActiveScene();
+            if(activeScene.buildIndex == 0){
+                SceneManager.LoadScene(0);
+            } else {
+                SceneManager.LoadScene(1);
+            }
+    }
+
     void OnCollisionEnter(Collision collision){
+        if(state != State.Alive) return;
         switch (collision.gameObject.tag)
         {   
             case "Friendly":
-                print("collision okay");
                 break;
-            case "Fuel":
-                print("Fuel");
+            case "Finish":
+                state = State.Transending;
+                if(audioSource.isPlaying){
+                    audioSource.Stop();
+                }       
+                audioSource.PlayOneShot(completionSound);
+                successParticles.Play();
+                Invoke("LoadNextScene",2f);
                 break;
             default:
-                print("collision dead");
+                state = State.Dying;
+                if(audioSource.isPlaying){
+                    audioSource.Stop();
+                }       
+
+                audioSource.PlayOneShot(collisionSound);
+                deathParticles.Play();
+                Invoke("resetCurrentScene",2f);
                 break;
         }
     }
